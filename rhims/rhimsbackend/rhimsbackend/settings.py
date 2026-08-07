@@ -151,6 +151,11 @@ DATABASES = {
 # password; ModelBackend still owns that.
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
+    # Case-insensitive username lookup for login (admin/Admin/ADMIN all match
+    # the same account). Sits after Axes (which must intercept every
+    # authenticate() call first) and before ModelBackend (the fallback that
+    # still owns password checking if this backend doesn't find a match).
+    'authentication.backends.CaseInsensitiveModelBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
