@@ -28,7 +28,11 @@ This receiver raises rest_framework.exceptions.PermissionDenied, which:
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db.models.signals import pre_save
 from django.dispatch import receiver
+
 from rest_framework.exceptions import PermissionDenied
 
 from axes.signals import user_locked_out
@@ -49,3 +53,36 @@ def raise_permission_denied_on_lockout(*args, **kwargs):
             "locked. Please try again later or contact an administrator."
         )
     raise PermissionDenied(detail)
+
+# ---------------------------------------------------------------------------
+# MODEL-LEVEL VALIDATION: block usernames that differ only by case.
+#
+# CaseInsensitiveModelBackend (authentication/backends.py) makes LOGIN
+# treat "Admin"/"admin"/"ADMIN" as the same account by looking them up with
+# username__iexact. But that only helps if just ONE such account exists.
+# Nothing before this stopped someone from actually CREATING a second
+# account ("admin") while "Admin" already existed — whichever account
+# username__iexact happened to return first would "win" unpredictably, and
+# creating a third would raise MultipleObjectsReturned and hard-fail every
+# login for all of them.
+#
+# This pre_save receiver closes that gap: it runs on every User save
+# (createsuperuser, the Django admin "Add user" form, and any programmatic
+# User.objects.create_user() call elsewhere in the codebase) and rejects
+# the save outright if a DIFFERENT existing user already has the same
+# username under a case-insensitive comparison.
+# ---------------------------------------------------------------------------
+@receiver(pre_save, sender=get_user_model())
+def prevent_case_variant_duplicate_usernames(sender, instance, **kwargs):
+    if not instance.username:
+        return
+
+    conflict = sender.objects.filter(
+        username__iexact=instance.username
+    ).exclude(pk=instance.pk).exists()
+
+    if conflict:
+        raise ValidationError(
+            {"username": "A user with this username already exists "
+                          "(usernames are case-insensitive)."}
+        )
