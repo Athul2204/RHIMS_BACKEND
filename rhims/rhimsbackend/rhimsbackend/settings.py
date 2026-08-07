@@ -133,6 +133,13 @@ DATABASES = {
         # the login endpoint (obscured as "Invalid username or password").
         'OPTIONS': {
             'charset': 'utf8mb4',
+            # SECURITY/DATA INTEGRITY: MySQL Strict Mode escalates data-
+            # truncation and similar silent-corruption warnings into hard
+            # errors on INSERT/UPDATE, instead of quietly truncating or
+            # coercing bad values. Off by default on many MySQL installs
+            # (including PythonAnywhere's), which is what Django's W002
+            # system check warns about.
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         },
     }
 }
