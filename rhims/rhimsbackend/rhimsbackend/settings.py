@@ -151,12 +151,15 @@ DATABASES = {
 # password; ModelBackend still owns that.
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
-    # Reverted to exact-case username matching (Django's default via
-    # ModelBackend) - login now requires the exact case the username was
-    # created with. CaseInsensitiveModelBackend (authentication/backends.py)
-    # is still in the codebase, just not wired in here, in case this needs
-    # to be re-enabled later - just re-add it above ModelBackend.
-    'django.contrib.auth.backends.ModelBackend',
+    # StrictCaseModelBackend replaces plain ModelBackend here. Plain
+    # ModelBackend's username lookup is case-INSENSITIVE on this DB because
+    # MySQL's default collation folds case at the SQL level, before Django
+    # ever sees the row - so "athul" would match an account created as
+    # "Athul" even with CaseInsensitiveModelBackend removed. This backend
+    # re-checks the exact casing in Python after the lookup, matching the
+    # same fix already applied to the JWT/API login in
+    # authentication/serializers.py (CustomTokenObtainPairSerializer).
+    'authentication.backends.StrictCaseModelBackend',
 ]
 
 # ── django-axes: brute-force / credential-stuffing lockout ─────────────────
