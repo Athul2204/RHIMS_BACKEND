@@ -1112,10 +1112,18 @@ class FinanceDashboardView(APIView):
         lab_rev,   lab_count   = _get_lab_revenue(start, end, branch)
         home_visit_rev, home_visit_count = _get_home_visit_revenue(start, end, branch)  # subset of cons_rev, informational only
         income = _income_breakdown(start, end, branch)
-        total_revenue = cons_rev + pharm_rev + income["total"]  # Reception + Pharmacy + Other Income; lab shown separately
+
+        # ✅ FIX: "revenue.total" is what the frontend's Revenue card
+        # displays, labeled "Consultation + Pharmacy" — it must only ever
+        # be those two. Other Income (lab commission, donations, etc.) is
+        # real money in and still correctly counts toward Profit/Loss
+        # below, but it has its own dedicated "Other Income" stat card and
+        # must not be silently folded into Revenue too, or the card's own
+        # label becomes wrong.
+        revenue_total = cons_rev + pharm_rev
 
         exp = _expenses_breakdown(start, end, branch)
-        profit_loss = total_revenue - exp["net_expenses"]
+        profit_loss = (revenue_total + income["total"]) - exp["net_expenses"]
 
         span_days = (end - start).days
         if period == "year" or (period == "custom" and span_days > 62):
@@ -1132,7 +1140,7 @@ class FinanceDashboardView(APIView):
         return Response({
             "period": {"start": start, "end": end, "label": period},
             "revenue": {
-                "total":        float(total_revenue),
+                "total":        float(revenue_total),
                 "consultation": {"amount": float(cons_rev),  "count": cons_count},
                 "pharmacy":     {"amount": float(pharm_rev), "count": pharm_count},
                 "laboratory":   {"amount": float(lab_rev),   "count": lab_count},
