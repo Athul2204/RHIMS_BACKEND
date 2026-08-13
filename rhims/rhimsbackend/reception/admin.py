@@ -65,12 +65,14 @@ class ConsultationBillAdmin(admin.ModelAdmin):
         'total_amount',
         'payment_status',
         'consultation_type',
+        'billed_department',
         'consultation_date',
         'created_at',
     ]
     list_filter = [
         'payment_status',
         'consultation_type',
+        'billed_department',
         'consultation_date',
         'created_at',
         'payment_method',
@@ -104,6 +106,7 @@ class ConsultationBillAdmin(admin.ModelAdmin):
                 'consultation_date',
                 'consultation_type',
                 'consultation_fee',
+                'billed_department',
             )
         }),
         ('Billing', {

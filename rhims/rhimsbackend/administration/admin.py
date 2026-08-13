@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ReceptionistProfile, PharmacistProfile, Procedure, AuditLog, Branch, ManagerBranchAccess, UserDevice
+from .models import ReceptionistProfile, PharmacistProfile, Procedure, BillingDepartment, AuditLog, Branch, ManagerBranchAccess, UserDevice
 
 # StaffProfile is registered in authentication/admin.py alongside the
 # custom User admin so password handling is centralised. Registering it
@@ -64,6 +64,15 @@ class ProcedureAdmin(admin.ModelAdmin):
     list_filter   = ("is_active",)
     readonly_fields = ("procedure_id", "created_at", "updated_at")
     ordering = ("name",)
+
+
+@admin.register(BillingDepartment)
+class BillingDepartmentAdmin(admin.ModelAdmin):
+    list_display  = ("department_id", "name", "display_order", "is_active", "updated_at")
+    search_fields = ("name",)
+    list_filter   = ("is_active",)
+    readonly_fields = ("department_id", "created_at", "updated_at")
+    ordering = ("display_order", "name")
 
 
 @admin.register(ManagerBranchAccess)

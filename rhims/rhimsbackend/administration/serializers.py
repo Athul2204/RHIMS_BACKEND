@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from .models import StaffProfile, ReceptionistProfile, PharmacistProfile, GuestDoctorProfile, CommonReceptionistProfile, CommonPharmacistProfile, Procedure, AuditLog, Branch, ManagerBranchAccess
+from .models import StaffProfile, ReceptionistProfile, PharmacistProfile, GuestDoctorProfile, CommonReceptionistProfile, CommonPharmacistProfile, Procedure, BillingDepartment, AuditLog, Branch, ManagerBranchAccess
 
 ROLE_MIN_AGE = {
     "Receptionist": 21,
@@ -590,6 +590,14 @@ class ProcedureSerializer(serializers.ModelSerializer):
         model = Procedure
         fields = "__all__"
         read_only_fields = ["procedure_id", "created_at", "updated_at", "created_by_pharmacist"]
+
+
+# ─── Billing Department Serializer ────────────────────────────────
+class BillingDepartmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillingDepartment
+        fields = "__all__"
+        read_only_fields = ["department_id", "created_at", "updated_at"]
 
 
 # ─── Audit Log Serializer ────────────────────────────────────────

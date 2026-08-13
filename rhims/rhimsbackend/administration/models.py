@@ -488,6 +488,57 @@ class Procedure(models.Model):
 
 
 # ─────────────────────────────────────────────
+# BILLING DEPARTMENT
+# ─────────────────────────────────────────────
+class BillingDepartment(models.Model):
+    """
+    Manager-curated master list of departments a consultation can be
+    *billed against* (e.g. 'General Medicine', 'Paediatrics', 'Emergency').
+
+    This is deliberately separate from DoctorProfile.department /
+    GuestDoctorProfile.department (the doctor's own home department) and
+    from manager.Specialty (the public-website specialty pages). A
+    paediatrician, for example, is still a paediatrician on their profile,
+    but reception may need to bill that same consultation under Emergency
+    or General Medicine depending on which department actually saw the
+    patient. billed_department on ConsultationBill records that choice.
+
+    Hospital-wide (not per-branch) — the same set of departments applies
+    across every branch, unlike Procedure's per-branch catalog.
+    """
+
+    department_id = models.AutoField(primary_key=True)
+
+    name = models.CharField(max_length=200, unique=True)
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive departments are hidden from the reception billing "
+                   "dropdown but are kept for historical bills that reference them.",
+    )
+
+    display_order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if not self.name or not self.name.strip():
+            raise ValidationError({"name": "Department name cannot be blank."})
+        self.name = self.name.strip()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+
+# ─────────────────────────────────────────────
 # AUDIT LOG
 # ─────────────────────────────────────────────
 class AuditLog(models.Model):

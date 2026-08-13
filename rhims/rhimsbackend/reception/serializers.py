@@ -338,6 +338,14 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
         help_text='Patient assigned doctor info'
     )
 
+    # ── Branch details (read-only, for print/receipt headers) ──────────
+    # ConsultationBill.branch already carries the correct one (auto-set
+    # from patient.branch on save) — these just surface its fields
+    # instead of leaving the frontend with only the raw branch id.
+    branch_name = serializers.SerializerMethodField(read_only=True)
+    branch_address = serializers.SerializerMethodField(read_only=True)
+    branch_phone = serializers.SerializerMethodField(read_only=True)
+
     # ────────────────────────────────────────────────────────────────────────
     # DOCTOR SELECTION (Write/Nullable)
     # ────────────────────────────────────────────────────────────────────────
@@ -368,6 +376,24 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
         allow_blank=True,
         default="",
         help_text='Doctor name for manual entry or display'
+    )
+
+    # ────────────────────────────────────────────────────────────────────────
+    # BILLED DEPARTMENT (Write/Nullable — independent of the doctor's own
+    # department; see ConsultationBill.billed_department docstring)
+    # ────────────────────────────────────────────────────────────────────────
+    billed_department = serializers.PrimaryKeyRelatedField(
+        queryset=[],  # placeholder — set in __init__ below, same pattern as doctor/guest_doctor
+        allow_null=True,
+        required=False,
+        help_text='Department this consultation is billed against (e.g. General Medicine, '
+                   'Paediatrics, Emergency). Defaults to the selected doctor\'s own department '
+                   'if left blank.'
+    )
+    billed_department_name = serializers.CharField(
+        source="billed_department.name",
+        read_only=True,
+        default=None,
     )
 
     # ────────────────────────────────────────────────────────────────────────
@@ -457,6 +483,10 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
     #   AttributeError → 500 Internal Server Error.
     #
     #   __init__ runs on every construction, making it the right place.
+    #
+    #   billed_department has the exact same placeholder-queryset=[] issue
+    #   (see below) — without this it would 500 the same way doctor/
+    #   guest_doctor used to.
     # ────────────────────────────────────────────────────────────────────────
 
     def __init__(self, *args, **kwargs):
@@ -501,6 +531,25 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         try:
+            # Same reasoning as doctor/guest_doctor above: without an
+            # explicit queryset here, billed_department keeps its
+            # placeholder queryset=[] and any PK submitted from the
+            # frontend fails validation. Manager-curated, hospital-wide
+            # list — no branch scoping needed (see BillingDepartment
+            # docstring in administration/models.py).
+            from administration.models import BillingDepartment
+            from django.db.models import Q
+            dept_qs = BillingDepartment.objects.filter(is_active=True)
+            # Keep the bill's current department selectable even if it has
+            # since been deactivated, so editing an old bill doesn't wipe it.
+            if self.instance is not None and getattr(self.instance, 'billed_department_id', None):
+                dept_qs = BillingDepartment.objects.filter(
+                    Q(is_active=True) | Q(pk=self.instance.billed_department_id)
+                )
+            self.fields['billed_department'].queryset = dept_qs
+        except Exception:
+            pass
+        try:
             if 'patient' in self.fields and request is not None:
                 from authentication.utils import scope_queryset_to_branch
                 self.fields['patient'].queryset = scope_queryset_to_branch(
@@ -530,6 +579,15 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
                 ),
             }
         return None
+
+    def get_branch_name(self, obj):
+        return obj.branch.name if obj.branch_id else None
+
+    def get_branch_address(self, obj):
+        return obj.branch.address if obj.branch_id else None
+
+    def get_branch_phone(self, obj):
+        return obj.branch.phone if obj.branch_id else None
 
     def get_doctor_type(self, obj):
         """Determine which doctor scenario this bill uses."""
@@ -720,6 +778,31 @@ class ConsultationBillSerializer(serializers.ModelSerializer):
                         "Consultation fee cannot be negative."
                     )
                 })
+
+        # ────────────────────────────────────────────────────────────────
+        # BILLED DEPARTMENT — default to the doctor's own home department
+        # ────────────────────────────────────────────────────────────────
+        # Reception can freely override this (that's the whole point of the
+        # field — see its docstring/help_text) — we only fill it in when
+        # they haven't explicitly chosen one. A paediatrician's own
+        # DoctorProfile.department is free text, so we match it against the
+        # manager-curated BillingDepartment list by name; if there's no
+        # matching active entry, we just leave it blank rather than error —
+        # reception can still pick one from the dropdown.
+        if "billed_department" not in data or data.get("billed_department") is None:
+            home_department_name = None
+            if doctor is not None:
+                home_department_name = doctor.department
+            elif guest_doctor is not None:
+                home_department_name = guest_doctor.department
+
+            if home_department_name and home_department_name.strip():
+                from administration.models import BillingDepartment
+                match = BillingDepartment.objects.filter(
+                    name__iexact=home_department_name.strip(), is_active=True
+                ).first()
+                if match:
+                    data["billed_department"] = match
 
         # ────────────────────────────────────────────────────────────────
         # REVISIT-SPECIFIC VALIDATIONS

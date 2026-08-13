@@ -313,6 +313,7 @@ class ConsultationBillListView(ListAPIView):
                 'doctor__staff',
                 'doctor__staff__user',
                 'guest_doctor',
+                'billed_department',
                 'consultation',
             )
             .order_by('-created_at')
@@ -381,6 +382,7 @@ class ConsultationBillDetailView(RetrieveUpdateAPIView):
             'doctor__staff',
             'doctor__staff__user',
             'guest_doctor',
+            'billed_department',
             'consultation',
         )
         return scope_queryset_to_branch(qs, self.request.user)

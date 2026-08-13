@@ -6,14 +6,14 @@ from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 
-from .models import StaffProfile, ReceptionistProfile, PharmacistProfile, GuestDoctorProfile, CommonReceptionistProfile, CommonPharmacistProfile, Procedure, AuditLog, HospitalSettings, Branch, ManagerBranchAccess
+from .models import StaffProfile, ReceptionistProfile, PharmacistProfile, GuestDoctorProfile, CommonReceptionistProfile, CommonPharmacistProfile, Procedure, BillingDepartment, AuditLog, HospitalSettings, Branch, ManagerBranchAccess
 from doctor.models import DoctorProfile
 from .serializers import (
     StaffProfileSerializer, ReceptionistProfileSerializer,
     PharmacistProfileSerializer, GuestDoctorProfileSerializer,
     CommonReceptionistProfileSerializer, CommonPharmacistProfileSerializer,
     DoctorProfileSerializer,
-    ProcedureSerializer, AuditLogSerializer,
+    ProcedureSerializer, BillingDepartmentSerializer, AuditLogSerializer,
     HospitalSettingsSerializer, BranchSerializer,
     ManagerBranchAccessSerializer, ManagerBranchAccessGrantSerializer,
 )
@@ -1087,6 +1087,98 @@ class ProcedureDetailView(APIView):
         log_admin_action(request, "DEACTIVATE", "Administration", obj, label=f"Procedure: {obj.name}")
         return Response(
             {"message": f"Procedure '{obj.name}' has been deactivated."},
+            status=status.HTTP_200_OK,
+        )
+
+
+# ─── Billing Departments ───────────────────────────────────────────
+# Manager-curated master list of departments a consultation bill can be
+# billed against (e.g. General Medicine, Paediatrics, Emergency). Used by
+# reception's billing dropdown — separate from a doctor's own home
+# department, so a paediatrician's consultation can still be billed under
+# Emergency, General Medicine, etc. Global list — not per-branch.
+class BillingDepartmentListView(APIView):
+    """
+    GET:  Any authenticated user (reception needs it for the billing dropdown).
+    POST: Admin or Manager.
+    """
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticatedResolveManagerBranch()]
+        return [IsAdminOrManager()]
+
+    def get(self, request):
+        qs = BillingDepartment.objects.order_by("display_order", "name")
+
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+
+        from authentication.permissions import _get_role
+        if _get_role(request.user) not in ("admin", "manager"):
+            qs = qs.filter(is_active=True)
+        elif request.query_params.get("include_inactive", "").lower() != "true":
+            qs = qs.filter(is_active=True)
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(
+            BillingDepartmentSerializer(page, many=True, context={"request": request}).data
+        )
+
+    def post(self, request):
+        s = BillingDepartmentSerializer(data=request.data, context={"request": request})
+        if s.is_valid():
+            instance = s.save()
+            log_admin_action(request, "CREATE", "Administration", instance, label=f"Billing Department: {instance.name}")
+            return Response(
+                {"message": "Billing department created successfully.", "id": instance.pk, "data": s.data},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response({"errors": s.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BillingDepartmentDetailView(APIView):
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticatedResolveManagerBranch()]
+        return [IsAdminOrManager()]
+
+    def _obj(self, pk):
+        return get_object_or_404(BillingDepartment.objects.all(), pk=pk)
+
+    def get(self, request, pk):
+        return Response(BillingDepartmentSerializer(self._obj(pk), context={"request": request}).data)
+
+    def put(self, request, pk):
+        s = BillingDepartmentSerializer(self._obj(pk), data=request.data, context={"request": request})
+        if s.is_valid():
+            instance = s.save()
+            log_admin_action(request, "UPDATE", "Administration", instance, label=f"Billing Department: {instance.name}")
+            return Response({"message": "Billing department updated.", "data": s.data})
+        return Response({"errors": s.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        s = BillingDepartmentSerializer(self._obj(pk), data=request.data, partial=True, context={"request": request})
+        if s.is_valid():
+            instance = s.save()
+            log_admin_action(request, "UPDATE", "Administration", instance, label=f"Billing Department: {instance.name}")
+            return Response({"message": "Billing department updated.", "data": s.data})
+        return Response({"errors": s.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        obj = self._obj(pk)
+        if not obj.is_active:
+            return Response(
+                {"message": "Billing department is already inactive."},
+                status=status.HTTP_200_OK,
+            )
+        obj.is_active = False
+        obj.save(update_fields=["is_active", "updated_at"])
+        log_admin_action(request, "DEACTIVATE", "Administration", obj, label=f"Billing Department: {obj.name}")
+        return Response(
+            {"message": f"Billing department '{obj.name}' has been deactivated."},
             status=status.HTTP_200_OK,
         )
 

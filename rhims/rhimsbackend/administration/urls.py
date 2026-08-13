@@ -14,6 +14,7 @@ from .views import (
     CommonPharmacistListView, CommonPharmacistDetailView,
     CommonPharmacistDeactivateView, CommonPharmacistReactivateView,
     ProcedureListView, ProcedureDetailView,
+    BillingDepartmentListView, BillingDepartmentDetailView,
     AuditLogListView,
     ReceptionistSelfView, PharmacistSelfView,
     HospitalSettingsView,
@@ -71,6 +72,10 @@ urlpatterns = [
     # ── Procedures ───────────────────────────────────────────────
     path("procedures/",                   ProcedureListView.as_view(),   name="procedure-list"),
     path("procedures/<int:pk>/",          ProcedureDetailView.as_view(), name="procedure-detail"),
+
+    # ── Billing Departments ─────────────────────────────────────────
+    path("billing-departments/",          BillingDepartmentListView.as_view(),   name="billing-department-list"),
+    path("billing-departments/<int:pk>/", BillingDepartmentDetailView.as_view(), name="billing-department-detail"),
 
     # ── Audit log ────────────────────────────────────────────────
     path("audit/",                        AuditLogListView.as_view(),    name="audit-log"),

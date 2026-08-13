@@ -1233,7 +1233,7 @@ class AllBillsView(APIView):
                 cb_qs = ConsultationBill.objects.filter(consultation_date__range=(start, end))
                 if branch is not None:
                     cb_qs = cb_qs.filter(branch=branch)
-                for b in cb_qs.select_related("patient", "consultation"):
+                for b in cb_qs.select_related("patient", "consultation", "billed_department"):
                     # If reception has cancelled the linked appointment, surface that
                     # here as the bill's status (mirrors how Pharmacy's bill_status
                     # lifecycle, including CANCELLED, is surfaced via payment_status
@@ -1253,6 +1253,7 @@ class AllBillsView(APIView):
                         "consultation_status": consultation.status if consultation else None,
                         "payment_method": b.payment_method,
                         "consultation_type": b.consultation_type,
+                        "billed_department_name": b.billed_department.name if b.billed_department_id else None,
                         "home_visit_fee": float(b.consultation_fee) if b.consultation_type == "HOME_VISIT" else None,
                         "travel_charge": float(b.travel_charge) if b.consultation_type == "HOME_VISIT" else None,
                     })
@@ -1415,7 +1416,7 @@ class BillDetailView(APIView):
             from reception.models import ConsultationBill
             from doctor.models import ConsultationStatus
             b = get_object_or_404(
-                ConsultationBill.objects.select_related("patient", "doctor", "guest_doctor", "consultation").filter(**branch_filter),
+                ConsultationBill.objects.select_related("patient", "doctor", "guest_doctor", "consultation", "billed_department").filter(**branch_filter),
                 pk=bill_id,
             )
             consultation = getattr(b, "consultation", None)
@@ -1431,6 +1432,7 @@ class BillDetailView(APIView):
                     "phone": b.patient.phone if b.patient else None,
                 },
                 "doctor_name":         b.doctor_name,
+                "billed_department_name": b.billed_department.name if b.billed_department_id else None,
                 "consultation_type":   b.consultation_type,
                 "consultation_fee":    float(b.consultation_fee),
                 "registration_fee":    float(b.registration_fee),

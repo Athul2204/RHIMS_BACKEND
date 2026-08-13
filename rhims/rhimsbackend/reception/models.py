@@ -388,6 +388,30 @@ class ConsultationBill(models.Model):
     # Permanent name copy — preserved even if doctor/guest_doctor is deactivated.
     doctor_name = models.CharField(max_length=200)
 
+    # ── Billed department ──────────────────────────────────────────────
+    #
+    # Which department this consultation is actually being billed against
+    # (e.g. General Medicine, Paediatrics, Emergency), independent of the
+    # doctor's own home department/specialty on their profile. A
+    # paediatrician may still see a patient billed under Emergency or
+    # General Medicine — this field records reception's choice for that
+    # bill, not the doctor's usual department.
+    #
+    # Picked from the manager-curated administration.BillingDepartment
+    # list (see that model's docstring). Defaults to the selected
+    # doctor's/guest doctor's own department in
+    # ConsultationBillSerializer.validate() when not explicitly provided,
+    # but reception can freely override it.
+    billed_department = models.ForeignKey(
+        "administration.BillingDepartment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consultation_bills",
+        help_text="Department this consultation is billed against — may differ "
+                   "from the doctor's own home department.",
+    )
+
     consultation_date = models.DateField(default=timezone.localdate)  # FIX: localdate returns a date, not a datetime
     consultation_type = models.CharField(
         max_length=10, choices=CONSULTATION_TYPE_CHOICES, default='NEW'
